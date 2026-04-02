@@ -1,8 +1,0 @@
-# settings.py
-# all the math varibles dmg spee height ect
-# character BulletCapsuleCollision demensions
-player_speed = 8
-Player_height = 1.75
-player_redius = 0.4
-
-
