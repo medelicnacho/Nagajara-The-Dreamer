@@ -52,7 +52,7 @@ NPC_TICK_RATE_CLOSE = 0.25    # close npc brain updates every 0.25 seconds
 CONTAGION_RADIUS = 8.0        # how close npcs must be to affect each other
 CONTAGION_FEAR_GAIN = 0.25    # default fear gain when fear packet is received
 CONTAGION_STRESS_GAIN = 0.15  # default stress gain when stress packet is received
-CONTAGION_CURIOSITY_GAIN = 0.20  # default curiosity gain from interesting events
+CONTAGION_CURIOSITY_GAIN = 0.20   # default curiosity gain from interesting events
 CONTAGION_TRUST_GAIN = 0.10   # default trust gain from positive social influence
 
 # thresholds for deciding whether an npc is "emotionally loud"
@@ -62,8 +62,10 @@ CONTAGION_STRESS_THRESHOLD = 0.70
 CONTAGION_CURIOSITY_THRESHOLD = 0.65
 CONTAGION_TRUST_THRESHOLD = 0.70
 
-CONTAGION_EMIT_COOLDOWN = 3.0 # npc must wait this many secdons before emiting again
-CONTAGION_EMIT_CHANCE = 0.20 # chance to emit when emotion is above threshold
+# stabilization for contagion
+CONTAGION_EMIT_COOLDOWN = 3.0     # npc must wait this many seconds before emitting again
+CONTAGION_EMIT_CHANCE = 0.20      # chance to emit when emotion is above threshold
+
 # optional distance falloff control
 # if True, closer npcs receive stronger contagion
 # if False, everyone in radius receives the same flat intensity
@@ -77,6 +79,22 @@ CONTAGION_USE_DISTANCE_FALLOFF = True
 
 NPC_MEMORY_LIMIT = 6          # max short memory tags stored per npc
 NPC_STATE_HISTORY_LIMIT = 10  # max recent emotional states stored per npc
+
+
+# ============================================================
+# SIMPLE NPC COMBAT SETTINGS
+# first pass for npc vs npc killing
+# ============================================================
+
+NPC_MAX_HP = 100.0            # base hp for every npc
+NPC_ATTACK_RANGE = 3.0        # how close npcs must be to hit each other
+NPC_ATTACK_DAMAGE = 10.0      # flat damage per hit
+NPC_ATTACK_COOLDOWN = 1.2     # seconds between attacks
+
+# emotional gate for aggression
+# npc only attacks enemies if one of these is high enough
+NPC_ATTACK_FEAR_THRESHOLD = 0.70
+NPC_ATTACK_STRESS_THRESHOLD = 0.70
 
 
 # ============================================================
@@ -100,3 +118,13 @@ PHI3_TIMEOUT = 10                    # timeout for llm response in seconds
 PRINT_NPC_THOUGHTS = True            # print npc thoughts in terminal for debugging
 PRINT_CONTAGION_EVENTS = True        # print contagion packets for debugging
 PRINT_LOD_CHANGES = True             # print when npc changes lod mode
+PRINT_ATTACK_EVENTS = True           # print attacks for debugging
+PRINT_DEATH_EVENTS = True            # print deaths for debugging
+
+# ============================================================
+# SIMPLE NPC MOVEMENT SETTINGS
+# first pass for npc chasing behavior
+# ============================================================
+
+NPC_MOVE_SPEED = 2.5          # how fast npcs move toward targets
+NPC_STOP_DISTANCE = 2.2       # stop a little before fully overlapping target

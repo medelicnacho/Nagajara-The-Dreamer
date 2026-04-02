@@ -1,142 +1,186 @@
-from panda3d.core import Vec3
 from direct.task import Task
+from panda3d.core import Vec3
 
 from npc import NPC
 from settings import (
     CONTAGION_RADIUS,
     CONTAGION_USE_DISTANCE_FALLOFF,
     PRINT_CONTAGION_EVENTS,
+    NPC_ATTACK_RANGE,
+    NPC_ATTACK_DAMAGE,
+    NPC_ATTACK_COOLDOWN,
+    PRINT_ATTACK_EVENTS,
+    NPC_MOVE_SPEED,
+    NPC_STOP_DISTANCE,
 )
 
 
 class World:
     def __init__(self, game):
         self.game = game
-
-        # ============================================================
-        # NPC STORAGE
-        # world owns the list of all live npc wrappers
-        # this makes it easy to do group systems like contagion later
-        # ============================================================
         self.npcs = []
 
-        # ============================================================
-        # TEST NPC SETUP
-        # make a few simple boxes so contagion has someone to spread to
-        # ============================================================
-        self.spawn_npc("Ralph", 5, 10, 0, faction="kalchakra")
-        self.spawn_npc("Mira", 8, 11, 0, faction="kalchakra")
-        self.spawn_npc("Tovin", 12, 9, 0, faction="kalchakra")
+        # kalchakra
+        self.spawn_group(
+            faction="kalchakra",
+            names=["Ralph", "Mira", "Tovin"],
+            center_x=-4,
+            center_y=10,
+            center_z=0,
+        )
 
-        # start main update loop
+        # atimarga
+        self.spawn_group(
+            faction="atimarga",
+            names=["Suri", "Veya", "Oren"],
+            center_x=0,
+            center_y=10,
+            center_z=0,
+        )
+
+        # nirmanakaya
+        self.spawn_group(
+            faction="nirmanakaya",
+            names=["Isha", "Leth", "Koro"],
+            center_x=4,
+            center_y=10,
+            center_z=0,
+        )
+
         self.game.taskMgr.add(self.update, "world_update")
 
-    # ============================================================
-    # SPAWN NPC
-    # tiny helper so npc creation stays clean
-    # ============================================================
-    def spawn_npc(self, name, x, y, z, faction="kalchakra"):
-        npc_model = self.game.loader.loadModel("models/box")  # simple placeholder body
-        npc_model.reparentTo(self.game.render)                # attach to the world scene
-        npc_model.setPos(x, y, z)                             # place it in the world
+    def spawn_npc(self, name, x, y, z, faction):
+        model = self.game.loader.loadModel("models/box")
+        model.reparentTo(self.game.render)
+        model.setPos(x, y, z)
+        if faction == "kalchakra":
+            model.setColor(1, 0, 0, 1) # blood red
 
-        npc = NPC(name, npc_model, faction=faction)           # wrap node with gameplay logic
-        self.npcs.append(npc)                                 # store for updates / contagion
-        return npc
+        elif faction == "atimarga":
+            model.setColor(0.6, 0, 1, 1)
 
-    # ============================================================
-    # PLAYER POSITION
-    # right now still fake, because your player system is placeholder
-    # later this should come from self.player.node or similar
-    # ============================================================
+        elif faction == "nirmanakaya":
+            model.setColor(0.2, 0.6, 1, 1)
+        npc = NPC(name, model, faction)
+        self.npcs.append(npc)
+
+    def spawn_group(self, faction, names, center_x, center_y, center_z):
+        offsets = [(-2, 0, 0), (0, 2, 0), (2, 0, 0)]
+
+        for name, (ox, oy, oz) in zip(names, offsets):
+            self.spawn_npc(
+                name,
+                center_x + ox,
+                center_y + oy,
+                center_z + oz,
+                faction,
+            )
+
     def get_player_pos(self):
         return Vec3(0, 0, 0)
 
-    # ============================================================
-    # DISTANCE FALLOFF
-    # closer contagion hits harder, farther contagion hits weaker
-    # result is always between 0.0 and 1.0
-    # ============================================================
-    def get_contagion_falloff(self, distance):
-        if distance >= CONTAGION_RADIUS:
-            return 0.0
+    def find_enemy(self, npc):
+        best = None
+        best_dist = NPC_ATTACK_RANGE
 
-        if not CONTAGION_USE_DISTANCE_FALLOFF:
-            return 1.0
+        for other in self.npcs:
+            if not npc.can_attack(other):
+                continue
 
-        # simple linear falloff:
-        # 0 distance  -> 1.0 strength
-        # max radius  -> 0.0 strength
-        return 1.0 - (distance / CONTAGION_RADIUS)
+            dist = (other.get_pos() - npc.get_pos()).length()
 
-    # ============================================================
-    # DISTRIBUTE CONTAGION
-    # source npc already decided what emotion to emit
-    # world decides who is close enough to receive it
-    # ============================================================
-    def spread_contagion_from(self, source_npc, packet):
+            if dist < best_dist:
+                best_dist = dist
+                best = other
+
+        return best
+
+    def move_toward_target(self, npc, target, dt):
+        if npc.is_dead or target.is_dead:
+            return
+
+        start = npc.get_pos()
+        end = target.get_pos()
+
+        direction = end - start
+        distance = direction.length()
+
+        if distance <= NPC_STOP_DISTANCE:
+            return
+
+        direction.normalize()
+
+        step = direction * NPC_MOVE_SPEED * dt
+        npc.node.setPos(start + step)
+
+    def update_combat(self, dt):
+        for npc in self.npcs:
+            if npc.is_dead:
+                continue
+
+            target = self.find_enemy(npc)
+            npc.attack_target = target
+
+            if target is not None:
+                self.move_toward_target(npc, target, dt)
+
+            if target is None:
+                continue
+
+            if npc.attack_cooldown > 0:
+                continue
+
+            target.take_damage(NPC_ATTACK_DAMAGE, npc.name)
+            npc.attack_cooldown = NPC_ATTACK_COOLDOWN
+
+            if PRINT_ATTACK_EVENTS:
+                print(f"[ATTACK] {npc.name} -> {target.name} | hp={target.hp:.1f}")
+
+    def spread_contagion(self, source, packet):
         if packet is None:
             return
 
-        source_pos = source_npc.get_pos()                     # where the source lives in world
-        emotion = packet["emotion"]                           # ex: fear / stress / curiosity
-        base_intensity = packet["intensity"]                  # default gain from settings
-        topic = packet["topic"]                               # current thought topic tint
+        for target in self.npcs:
+            if target is source or target.is_dead:
+                continue
 
-        for target_npc in self.npcs:
-            if target_npc is source_npc:
-                continue                                      # do not infect yourself
+            dist = (target.get_pos() - source.get_pos()).length()
 
-            target_pos = target_npc.get_pos()
-            distance = (target_pos - source_pos).length()     # source-target distance
+            if dist > CONTAGION_RADIUS:
+                continue
 
-            if distance > CONTAGION_RADIUS:
-                continue                                      # too far away, ignore
+            falloff = 1.0
+            if CONTAGION_USE_DISTANCE_FALLOFF:
+                falloff = 1.0 - (dist / CONTAGION_RADIUS)
 
-            falloff = self.get_contagion_falloff(distance)    # scale by distance
-            final_intensity = base_intensity * falloff        # weaker farther away
+            intensity = packet["intensity"] * falloff
 
-            if final_intensity <= 0.0:
-                continue                                      # safety check
-
-            target_npc.receive_contagion(
-                emotion=emotion,
-                intensity=final_intensity,
-                topic=topic,
+            target.receive_contagion(
+                packet["emotion"],
+                intensity,
+                packet["topic"],
             )
 
             if PRINT_CONTAGION_EVENTS:
                 print(
-                    f"[CONTAGION] "
-                    f"{source_npc.name} -> {target_npc.name} | "
-                    f"emotion={emotion} topic={topic} "
-                    f"distance={distance:.2f} intensity={final_intensity:.2f}"
+                    f"[CONTAGION] {source.name} -> {target.name} "
+                    f"| {packet['emotion']} {intensity:.2f}"
                 )
 
-    # ============================================================
-    # UPDATE
-    # 1) update every npc
-    # 2) collect any contagion packets that were emitted
-    # 3) spread those packets to nearby npcs
-    # ============================================================
     def update(self, task):
-        dt = globalClock.getDt()              # frame delta time from Panda3D
-        player_pos = self.get_player_pos()    # fake for now until player is real
+        dt = globalClock.getDt()
+        player_pos = self.get_player_pos()
 
-        emitted_packets = []                  # stores (source_npc, packet) for this frame
+        emitted = []
 
-        # step 1: update all npc brains / lod / bark logic
         for npc in self.npcs:
             packet = npc.update(player_pos, dt)
+            if packet:
+                emitted.append((npc, packet))
 
-            # if npc emitted contagion this tick, remember it for pass 2
-            if packet is not None:
-                emitted_packets.append((npc, packet))
+        for source, packet in emitted:
+            self.spread_contagion(source, packet)
 
-        # step 2: do contagion after all minds have had their own tick first
-        # this avoids order weirdness where earlier npcs affect later npcs
-        # before those later npcs got their own normal update
-        for source_npc, packet in emitted_packets:
-            self.spread_contagion_from(source_npc, packet)
+        self.update_combat(dt)
 
         return Task.cont
