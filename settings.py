@@ -62,6 +62,8 @@ CONTAGION_STRESS_THRESHOLD = 0.70
 CONTAGION_CURIOSITY_THRESHOLD = 0.65
 CONTAGION_TRUST_THRESHOLD = 0.70
 
+CONTAGION_EMIT_COOLDOWN = 3.0 # npc must wait this many secdons before emiting again
+CONTAGION_EMIT_CHANCE = 0.20 # chance to emit when emotion is above threshold
 # optional distance falloff control
 # if True, closer npcs receive stronger contagion
 # if False, everyone in radius receives the same flat intensity
