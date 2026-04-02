@@ -126,5 +126,54 @@ PRINT_DEATH_EVENTS = True            # print deaths for debugging
 # first pass for npc chasing behavior
 # ============================================================
 
-NPC_MOVE_SPEED = 2.5          # how fast npcs move toward targets
+NPC_MOVE_SPEED = 5.0          # how fast npcs move toward targets
 NPC_STOP_DISTANCE = 2.2       # stop a little before fully overlapping target
+
+# ============================================================
+# SIMPLE NPC FLEE SETTINGS
+# first pass for survival behavior
+# ============================================================
+
+NPC_FLEE_HP_THRESHOLD = 25.0      # flee when hp drops to this or lower
+NPC_FLEE_FEAR_THRESHOLD = 0.85    # flee when fear gets this high
+NPC_FLEE_SPEED = 3.5              # movement speed while fleeing
+NPC_SAFE_DISTANCE = 6.0           # if threat is farther than this, npc can stop fleeing
+
+# ------------------------------------------------------------
+# WANDER SETTINGS
+# these control idle roaming when an npc is not fighting
+# and not fleeing
+# ------------------------------------------------------------
+
+NPC_WANDER_SPEED = 3.2              # slow casual movement while roaming
+NPC_WANDER_RADIUS = 20.0             # how far an npc can roam from its home area
+NPC_WANDER_REACH_DISTANCE = 1.8     # how close it must get to a wander point
+NPC_WANDER_TIME_MIN = 0.5           # shortest time before picking a new wander point
+NPC_WANDER_TIME_MAX = 1.5           # longest time before picking a new wander point
+
+# ------------------------------------------------------------
+# GROUP / CHASE CONTROL
+# stops npcs from chasing forever across the whole map
+# ------------------------------------------------------------
+
+NPC_MAX_CHASE_DISTANCE_FROM_HOME = 12.0   # if target drags npc farther than this from home, stop chasing
+
+# ------------------------------------------------------------
+# ALLY SEEKING DURING FLEE
+# fleeing npcs try to run toward nearby same-faction allies
+# ------------------------------------------------------------
+
+NPC_ALLY_HELP_RADIUS = 12.0               # how far to look for same-faction allies when fleeing
+
+# ------------------------------------------------------------
+# AGGRO SETTINGS
+# controls how fights spread through nearby allies
+# ------------------------------------------------------------
+
+# ============================================================
+# AGGRO SETTINGS
+# controls how fights spread between nearby allies
+# ============================================================
+
+NPC_AGGRO_RADIUS = 15.0        # how far aggro spreads to allies
+NPC_AGGRO_DURATION = 6.0      # how long an npc stays locked on a target

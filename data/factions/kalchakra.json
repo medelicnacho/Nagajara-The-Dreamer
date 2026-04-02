@@ -1,10 +1,11 @@
 {
   "name": "Kal'Chakra",
   "emotion_bias": {
-    "fear": 0.15,
-    "stress": 0.35,
-    "curiosity": 0.05,
-    "trust": -0.10
+    "fear": 0.05,
+    "stress": 0.12,
+    "curiosity": 0.03,
+    "trust": -0.02,
+    "aggression": 1.28
   },
   "barks": [
     "Face me.",
