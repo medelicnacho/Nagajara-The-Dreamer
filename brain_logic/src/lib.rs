@@ -5,33 +5,31 @@ use rand::thread_rng;
 use std::collections::HashMap;
 
 // ------------------------------------------------------------
-// WHAT THIS FILE DOES
+// explanation:
+// this file is the Rust mind layer for each npc.
 //
-// this is the cheap Rust brain for each npc
+// what this block does:
+// - provides cheap inner cognition
+// - provides scalar emotions
+// - provides topic / thought drift
+// - exposes a Python class through PyO3
 //
-// in simple language:
-// - layer 1 picks a subconscious mood/state
-// - layer 2 picks a topic based on that state
-// - layer 3 picks a short thought fragment
-// - scalar emotions (fear, stress, curiosity, trust, aggression) bias the result
-// - python asks this brain what the npc feels/thinks
-//
-// python handles:
-// - movement
-// - combat
-// - faction colors
-// - spacing / distance / neighbors
-//
-// Rust handles:
-// - cheap inner cognition
+// how it fits into the code:
+// Python handles world space and combat.
+// Rust handles the cheap internal mind state that feeds behavior.
 // ------------------------------------------------------------
 
 
 // ============================================================
-// LAYER 1 - SUBCONSCIOUS STATE GRAPH
-// cheap emotional drift that can run on lots of NPCs
+// explanation:
+// subconscious transition graph.
+//
+// what this block does:
+// - defines how one subconscious state can drift into others
+//
+// how it fits into the code:
+// this is the base emotional state machine for npc thought flow.
 // ============================================================
-
 fn get_subconscious_transitions(state: &str) -> Vec<&'static str> {
     match state {
         "drifting"   => vec!["curious", "watchful", "drifting", "uneasy"],
@@ -51,10 +49,15 @@ fn get_subconscious_transitions(state: &str) -> Vec<&'static str> {
 }
 
 // ============================================================
-// LAYER 2 - TOPIC MARKOV
-// subconscious state nudges what kind of thought becomes active
+// explanation:
+// topic candidates by subconscious state.
+//
+// what this block does:
+// - maps each broad state to likely active topics
+//
+// how it fits into the code:
+// this is layer 2 of the mind, turning mood into subject matter.
 // ============================================================
-
 fn get_topic_candidates(state: &str) -> Vec<&'static str> {
     match state {
         "drifting"   => vec!["place", "place", "presence", "memory"],
@@ -74,10 +77,15 @@ fn get_topic_candidates(state: &str) -> Vec<&'static str> {
 }
 
 // ============================================================
-// LAYER 3 - THOUGHT FRAGMENTS
-// short thought seeds; python can pass recent 5 to the llm server
+// explanation:
+// thought fragments by topic.
+//
+// what this block does:
+// - maps each topic to short thought fragments
+//
+// how it fits into the code:
+// this is layer 3, turning topic into actual inner-thought text.
 // ============================================================
-
 fn get_thought_fragments(topic: &str) -> Vec<&'static str> {
     match topic {
         "place"      => vec!["this place feels familiar", "the air remembers something", "the dream folds strangely here"],
@@ -112,16 +120,29 @@ fn get_thought_fragments(topic: &str) -> Vec<&'static str> {
 }
 
 // ------------------------------------------------------------
-// helper: clamp a float into 0.0 to 1.0
-// used for emotion values
+// explanation:
+// clamp helper.
+//
+// what this block does:
+// - keeps emotion values between 0 and 1
+//
+// how it fits into the code:
+// prevents runaway bad values in the scalar emotion system.
 // ------------------------------------------------------------
 fn clamp01(v: f32) -> f32 {
     v.clamp(0.0, 1.0)
 }
 
 // ------------------------------------------------------------
-// helper: push into a vector but keep it capped
-// used for thought buffers, memory, and state history
+// explanation:
+// capped push helper.
+//
+// what this block does:
+// - pushes a new string into a buffer
+// - keeps only the most recent N items
+//
+// how it fits into the code:
+// used for memory, thought buffer, and state history.
 // ------------------------------------------------------------
 fn capped_push(buffer: &mut Vec<String>, value: String, max_len: usize) {
     buffer.push(value);
@@ -131,14 +152,15 @@ fn capped_push(buffer: &mut Vec<String>, value: String, max_len: usize) {
 }
 
 // ------------------------------------------------------------
-// bias subconscious transitions based on current scalar emotions
+// explanation:
+// biased transition helper.
 //
-// simple idea:
-// - high fear pushes fearful/suspicious states
-// - high stress pushes uneasy/desperate states
-// - high curiosity pushes curious more often
-// - high trust pushes hopeful/drifting more often
-// - high aggression pushes angry/aggressive states
+// what this block does:
+// - starts with normal subconscious transitions
+// - adds extra transition weight based on emotions
+//
+// how it fits into the code:
+// this is how scalar emotion values actually shape the inner mind drift.
 // ------------------------------------------------------------
 fn get_biased_transitions(
     state: &str,
@@ -180,9 +202,14 @@ fn get_biased_transitions(
 }
 
 // ------------------------------------------------------------
-// cheap numeric guess for how much the npc wants to speak
+// explanation:
+// speech desire helper.
 //
-// this is useful later for LLM gating
+// what this block does:
+// - calculates a rough desire-to-speak score
+//
+// how it fits into the code:
+// this can later gate llm or bark behavior in Python.
 // ------------------------------------------------------------
 fn calculate_speech_desire(
     state: &str,
@@ -202,19 +229,23 @@ fn calculate_speech_desire(
 }
 
 // ============================================================
-// NPC BRAIN
-// this struct is what Python creates for each npc
+// explanation:
+// main Rust npc mind struct.
+//
+// what this block does:
+// - stores scalar emotions
+// - stores current subconscious state and topic
+// - stores recent thought fragments and memory
+// - stores speech desire
+//
+// how it fits into the code:
+// this is the data Python reads and nudges to produce behavior.
 // ============================================================
-
 #[pyclass]
 pub struct NpcMind {
     #[pyo3(get)]
     pub name: String,
 
-    // --------------------------------------------------------
-    // scalar emotions
-    // these are the cheap numeric emotional values
-    // --------------------------------------------------------
     #[pyo3(get)]
     pub fear: f32,
     #[pyo3(get)]
@@ -226,27 +257,22 @@ pub struct NpcMind {
     #[pyo3(get)]
     pub aggression: f32,
 
-    // layer 1
     #[pyo3(get)]
     pub subconscious_state: String,
 
-    // layer 2
     #[pyo3(get)]
     pub active_topic: String,
 
-    // layer 3
     #[pyo3(get)]
     pub last_thought: String,
     #[pyo3(get)]
     pub thought_buffer: Vec<String>,
 
-    // memory-ish short buffers
     #[pyo3(get)]
     pub memory: Vec<String>,
     #[pyo3(get)]
     pub state_history: Vec<String>,
 
-    // cheap speech desire value
     #[pyo3(get)]
     pub speech_desire: f32,
 }
@@ -254,7 +280,15 @@ pub struct NpcMind {
 #[pymethods]
 impl NpcMind {
     // --------------------------------------------------------
-    // create a brand-new npc mind
+    // explanation:
+    // constructor for a fresh npc mind.
+    //
+    // what this block does:
+    // - initializes emotions
+    // - initializes state / topic / thought buffers
+    //
+    // how it fits into the code:
+    // Python creates this once for every npc.
     // --------------------------------------------------------
     #[new]
     fn new(name: String) -> Self {
@@ -276,19 +310,22 @@ impl NpcMind {
     }
 
     // --------------------------------------------------------
-    // one cheap cognition step
+    // explanation:
+    // one cheap cognition step.
     //
-    // order:
-    // 1. pick subconscious state
-    // 2. pick topic
-    // 3. pick thought fragment
-    // 4. update speech desire
-    // 5. apply passive emotional decay
+    // what this block does:
+    // - chooses next subconscious state
+    // - chooses next topic
+    // - chooses next thought fragment
+    // - updates speech desire
+    // - applies light emotion decay
+    //
+    // how it fits into the code:
+    // this is the core Rust "mind tick" that Python calls each update.
     // --------------------------------------------------------
     fn tick(&mut self) {
         let mut rng = thread_rng();
 
-        // ---------------- layer 1: subconscious drift ----------------
         let state_options = get_biased_transitions(
             &self.subconscious_state,
             self.fear,
@@ -306,7 +343,6 @@ impl NpcMind {
         self.subconscious_state = next_state;
         capped_push(&mut self.state_history, self.subconscious_state.clone(), 10);
 
-        // ---------------- layer 2: topic selection ----------------
         let topic_options = get_topic_candidates(&self.subconscious_state);
 
         let topic = topic_options
@@ -316,7 +352,6 @@ impl NpcMind {
 
         self.active_topic = topic;
 
-        // ---------------- layer 3: thought generation ----------------
         let thought_options = get_thought_fragments(&self.active_topic);
 
         let thought = thought_options
@@ -335,7 +370,6 @@ impl NpcMind {
             self.aggression,
         );
 
-        // light passive decay
         self.fear = clamp01(self.fear * 0.97);
         self.stress = clamp01(self.stress * 0.97);
         self.curiosity = clamp01((self.curiosity * 0.99).max(0.15));
@@ -343,8 +377,15 @@ impl NpcMind {
     }
 
     // --------------------------------------------------------
-    // directly nudge one emotion
-    // python faction bias uses this
+    // explanation:
+    // nudge a scalar emotion directly.
+    //
+    // what this block does:
+    // - adds a value into one named emotion
+    //
+    // how it fits into the code:
+    // Python faction bias, attack shock, death shock, and contagion
+    // all use this kind of direct emotional push.
     // --------------------------------------------------------
     fn nudge(&mut self, kind: String, amount: f32) {
         match kind.as_str() {
@@ -358,10 +399,15 @@ impl NpcMind {
     }
 
     // --------------------------------------------------------
-    // apply contagion from another npc
+    // explanation:
+    // apply contagion from another npc.
     //
-    // also writes a small memory tag like:
-    // heard_stress_danger
+    // what this block does:
+    // - changes emotions based on contagion type
+    // - records a small heard_* memory tag
+    #
+    // how it fits into the code:
+    // this is how world emotional ripple gets stored inside the mind.
     // --------------------------------------------------------
     fn apply_contagion(&mut self, emotion: String, intensity: f32, topic: String) {
         match emotion.as_str() {
@@ -389,14 +435,29 @@ impl NpcMind {
     }
 
     // --------------------------------------------------------
-    // lets python add a memory tag directly
+    // explanation:
+    // manually add a memory tag.
+    //
+    // what this block does:
+    // - stores a custom short memory string
+    //
+    // how it fits into the code:
+    // Python can use this later for special events if needed.
     // --------------------------------------------------------
     fn add_memory_tag(&mut self, tag: String) {
         capped_push(&mut self.memory, tag, 8);
     }
 
     // --------------------------------------------------------
-    // gets the most common recent subconscious state
+    // explanation:
+    // get dominant recent subconscious state.
+    //
+    // what this block does:
+    // - counts recent state history
+    // - returns the most common one
+    //
+    // how it fits into the code:
+    // useful for summarizing what the npc has "mostly been feeling."
     // --------------------------------------------------------
     fn get_dominant_state(&self) -> String {
         let mut counts: HashMap<&String, i32> = HashMap::new();
@@ -419,7 +480,14 @@ impl NpcMind {
     }
 
     // --------------------------------------------------------
-    // compact bundle for python bridge / future llm use
+    // explanation:
+    // compact packet for Python.
+    //
+    // what this block does:
+    // - returns a small summary bundle of current mind state
+    //
+    // how it fits into the code:
+    // Python can use this for bridges to logs, speech, or llm layers.
     // --------------------------------------------------------
     fn get_bridge_packet(&self) -> (String, String, String, Vec<String>, Vec<String>, f32) {
         (
@@ -433,8 +501,14 @@ impl NpcMind {
     }
 
     // --------------------------------------------------------
-    // clears recent thought buffer
-    // useful after python consumes it
+    // explanation:
+    // clear recent thought buffer.
+    //
+    // what this block does:
+    // - clears the short thought list
+    //
+    // how it fits into the code:
+    // useful when Python consumes the thought list and wants a fresh batch.
     // --------------------------------------------------------
     fn clear_thought_buffer(&mut self) {
         self.thought_buffer.clear();
@@ -442,9 +516,14 @@ impl NpcMind {
 }
 
 // ------------------------------------------------------------
-// python module export
+// explanation:
+// python module export.
 //
-// this is what makes `brain_logic.NpcMind` available in Python
+// what this block does:
+// - exposes NpcMind to Python as brain_logic.NpcMind
+//
+// how it fits into the code:
+// this is the bridge that lets your Python game actually use the Rust mind.
 // ------------------------------------------------------------
 #[pymodule]
 fn brain_logic(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {

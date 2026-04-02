@@ -9,29 +9,6 @@
 # - can flee
 # - can remember a current aggro target for a short time
 #
-# THIS VERSION:
-# - keeps the behavior state system
-# - keeps faction behavior profiles
-# - tunes faction personality harder
-#
-# FACTION GOALS:
-# Kalchakra:
-# - moves in packs
-# - raids
-# - aggressive
-# - runs less
-#
-# Atimarga:
-# - wanders more individually
-# - spreads out through the world
-# - avoids violence unless kin are threatened
-#
-# Nirmanakaya:
-# - stable
-# - grouped
-# - base-focused
-# - defensive / even
-#
 # IMPORTANT IDEA:
 # this file decides what the npc WANTS to do
 # world.py handles how movement happens in space
@@ -61,78 +38,63 @@ from settings import (
 
 class NPC:
     # ------------------------------------------------------------
-    # build one npc
+    # explanation:
+    # build one npc object.
     #
-    # plain english:
-    # this sets up the npc's local state:
-    # - name
-    # - Panda3D node
-    # - faction
-    # - Rust mind
-    # - hp and combat data
-    # - aggro memory
-    # - roaming data
-    # - timers
-    # - faction behavior profile
+    # what this block does:
+    # - stores identity, node, faction
+    # - builds the Rust mind
+    # - sets hp and combat state
+    # - sets aggro memory
+    # - loads faction data
+    # - builds faction behavior profile
+    #
+    # how it fits into the code:
+    # this is the full local state container for one npc.
     # ------------------------------------------------------------
     def __init__(self, name, node, faction="kalchakra"):
         self.name = name
         self.node = node
         self.faction = faction
 
-        # cheap Rust cognition layer
         self.mind = brain_logic.NpcMind(name)
 
-        # ---------------- combat / life ----------------
         self.hp = NPC_MAX_HP
         self.is_dead = False
         self.attack_cooldown = 0.0
         self.attack_target = None
 
-        # ---------------- flee state ----------------
-        # kept for compatibility with existing logic
         self.is_fleeing = False
-
-        # ---------------- behavior state ----------------
         self.current_behavior = "idle"
 
-        # ---------------- aggro state ----------------
         self.aggro_target = None
         self.aggro_timer = 0.0
 
-        # ---------------- world / roaming ----------------
         self.home_pos = None
         self.wander_target = None
         self.wander_timer = 0.0
 
-        # ---------------- general timers ----------------
         self.tick_timer = 0.0
         self.contagion_cooldown = 0.0
         self.last_bark = None
 
-        # load faction bark + emotional bias data
         with open(f"data/factions/{faction}.json") as f:
             self.faction_data = json.load(f)
 
-        # build faction personality profile
         self.behavior_profile = self.get_behavior_profile()
 
     # ------------------------------------------------------------
-    # build faction behavior profile
+    # explanation:
+    # build a behavior profile from faction.
     #
-    # plain english:
-    # each faction gets modifiers for:
-    # - aggression
-    # - flee tendency
-    # - loyalty to allies
-    # - grouping preference
-    # - roaming amount
-    # - movement speed while roaming
-    # - home attachment
+    # what this block does:
+    # - returns a dictionary of multipliers
+    # - controls aggression, flee tendency, loyalty, grouping,
+    #   roaming size, roaming speed, and home attachment
     #
-    # grouping:
-    # positive = likes allies nearby
-    # negative = prefers space / lone drifting
+    # how it fits into the code:
+    # this is how one shared npc class can still feel like three
+    # very different faction personalities.
     # ------------------------------------------------------------
     def get_behavior_profile(self):
         if self.faction == "kalchakra":
@@ -157,7 +119,6 @@ class NPC:
                 "home_attachment": 0.25,
             }
 
-        # nirmanakaya
         return {
             "aggression_mult": 1.0,
             "flee_mult": 1.0,
@@ -169,13 +130,28 @@ class NPC:
         }
 
     # ------------------------------------------------------------
-    # get current world position
+    # explanation:
+    # get world position.
+    #
+    # what this block does:
+    # - returns Panda3D node position
+    #
+    # how it fits into the code:
+    # tiny helper used all over the rest of the file.
     # ------------------------------------------------------------
     def get_pos(self):
         return self.node.getPos()
 
     # ------------------------------------------------------------
-    # pick LOD mode from distance to player
+    # explanation:
+    # choose lod mode from player distance.
+    #
+    # what this block does:
+    # - returns close / mid / far
+    # - also returns internal tick rate for that lod
+    #
+    # how it fits into the code:
+    # this keeps far-away npcs cheaper to update.
     # ------------------------------------------------------------
     def get_lod_mode(self, player_pos):
         dist = (self.get_pos() - player_pos).length()
@@ -188,7 +164,16 @@ class NPC:
             return "far", NPC_TICK_RATE_FAR
 
     # ------------------------------------------------------------
-    # choose a faction bark
+    # explanation:
+    # choose one bark line.
+    #
+    # what this block does:
+    # - picks a line from faction bark data
+    # - tries not to repeat the exact last bark
+    #
+    # how it fits into the code:
+    # this gives the simulation audible / visible flavor without
+    # needing expensive dialogue generation every frame.
     # ------------------------------------------------------------
     def choose_bark(self):
         barks = self.faction_data["barks"]
@@ -205,18 +190,30 @@ class NPC:
         return bark
 
     # ------------------------------------------------------------
-    # apply faction emotional bias
+    # explanation:
+    # apply faction emotional bias.
+    #
+    # what this block does:
+    # - pushes the Rust mind with faction emotion values
+    #
+    # how it fits into the code:
+    # this is how faction identity constantly colors npc inner state.
     # ------------------------------------------------------------
     def apply_faction_bias(self):
         for key, value in self.faction_data["emotion_bias"].items():
             self.mind.nudge(key, value)
 
     # ------------------------------------------------------------
-    # decide if this npc should flee
+    # explanation:
+    # decide if npc should flee.
     #
-    # plain english:
-    # lower flee_mult = harder to flee
-    # higher flee_mult = easier to flee
+    # what this block does:
+    # - checks low hp
+    # - checks high fear
+    # - modifies thresholds by faction flee tendency
+    #
+    # how it fits into the code:
+    # this is the survival-first branch that can override aggression.
     # ------------------------------------------------------------
     def should_flee(self):
         if self.is_dead:
@@ -235,18 +232,21 @@ class NPC:
 
         return False
 
-        # ------------------------------------------------------------
-    # decide if this npc is aggressive enough
+    # ------------------------------------------------------------
+    # explanation:
+    # decide if npc is aggressive enough.
     #
-    # plain english:
-    # higher aggression_mult = easier to enter aggression
-    # now also checks real aggression emotion
+    # what this block does:
+    # - Kalchakra always returns true
+    # - other factions check aggression, fear, or stress thresholds
+    #
+    # how it fits into the code:
+    # this is the main gate that controls whether tension becomes combat.
     # ------------------------------------------------------------
     def is_aggressive_enough(self):
         if self.is_dead:
             return False
 
-        # Kalchakra are always battle-ready
         if self.faction == "kalchakra":
             return True
 
@@ -263,12 +263,15 @@ class NPC:
         )
 
     # ------------------------------------------------------------
-    # decide if this npc is willing to help an ally
+    # explanation:
+    # decide if npc is willing to help allies.
     #
-    # plain english:
-    # especially important for Atimarga:
-    # they prefer not to start violence,
-    # but they WILL respond to pressure on their own
+    # what this block does:
+    # - checks stress and fear against a loyalty-based threshold
+    #
+    # how it fits into the code:
+    # this is mainly extra support flavor for factions that may not
+    # start fights as freely on their own.
     # ------------------------------------------------------------
     def is_loyal_enough_to_help(self):
         if self.is_dead:
@@ -283,15 +286,21 @@ class NPC:
         )
 
     # ------------------------------------------------------------
-    # start or refresh aggro on a target
+    # explanation:
+    # set or refresh aggro.
+    #
+    # what this block does:
+    # - stores an aggro target
+    # - refreshes aggro memory timer
+    #
+    # how it fits into the code:
+    # this is the local memory hook used by world.py ally alerts.
     # ------------------------------------------------------------
     def set_aggro(self, target):
         if self.is_dead:
             return
-
         if target is None:
             return
-
         if target.is_dead:
             return
 
@@ -299,7 +308,15 @@ class NPC:
         self.aggro_timer = NPC_AGGRO_DURATION
 
     # ------------------------------------------------------------
-    # decide whether this npc can attack another
+    # explanation:
+    # decide whether this npc can attack another.
+    #
+    # what this block does:
+    # - blocks dead / same-faction / fleeing / self-targeting cases
+    # - blocks aggression if this npc is not aggressive enough
+    #
+    # how it fits into the code:
+    # this is the final local permission check for combat.
     # ------------------------------------------------------------
     def can_attack(self, other):
         if self.is_dead or other.is_dead:
@@ -320,7 +337,18 @@ class NPC:
         return True
 
     # ------------------------------------------------------------
-    # take damage
+    # explanation:
+    # take damage and possibly die.
+    #
+    # what this block does:
+    # - subtracts hp
+    # - hides dead npcs
+    # - clears their combat state
+    # - prints death logs if enabled
+    #
+    # how it fits into the code:
+    # world.py handles group reaction to death, but this block handles
+    # the actual local state transition from alive to dead.
     # ------------------------------------------------------------
     def take_damage(self, amount, attacker):
         if self.is_dead:
@@ -342,7 +370,15 @@ class NPC:
                 print(f"[DEATH] {self.name} killed by {attacker}")
 
     # ------------------------------------------------------------
-    # maybe emit contagion packet
+    # explanation:
+    # maybe emit a contagion packet.
+    #
+    # what this block does:
+    # - rate-limits contagion output
+    # - emits a stress packet using current active topic
+    #
+    # how it fits into the code:
+    # this lets local cognition feed back into the world simulation.
     # ------------------------------------------------------------
     def maybe_emit_contagion(self):
         if self.is_dead or self.contagion_cooldown > 0:
@@ -357,21 +393,34 @@ class NPC:
         }
 
     # ------------------------------------------------------------
-    # receive contagion
+    # explanation:
+    # receive contagion.
+    #
+    # what this block does:
+    # - forwards emotional input into the Rust mind
+    #
+    # how it fits into the code:
+    # this is how world-level contagion changes local npc state.
     # ------------------------------------------------------------
     def receive_contagion(self, emotion, intensity, topic):
         if not self.is_dead:
             self.mind.apply_contagion(emotion, intensity, topic)
 
     # ------------------------------------------------------------
-    # decide high-level behavior
+    # explanation:
+    # decide high-level behavior.
     #
-    # plain english:
-    # this is the local decision layer
+    # what this block does:
+    # - dead units become idle
+    # - fleeing has top priority
+    # - any living aggro target forces aggressive behavior
+    # - non-Atimarga can also become proactively aggressive
+    # - medium tension becomes alert
+    # - otherwise falls back to idle
     #
-    # special faction flavor:
-    # Atimarga does not proactively start fights
-    # unless future design changes that
+    # how it fits into the code:
+    # this is the local intention selector.
+    # world.py reads this and turns it into physical action.
     # ------------------------------------------------------------
     def decide_behavior(self):
         if self.is_dead:
@@ -379,7 +428,6 @@ class NPC:
             self.is_fleeing = False
             return self.current_behavior
 
-        # survival first
         if self.should_flee():
             self.current_behavior = "fleeing"
             self.is_fleeing = True
@@ -387,32 +435,39 @@ class NPC:
 
         self.is_fleeing = False
 
-        # existing aggro still matters
         if self.aggro_target is not None and not self.aggro_target.is_dead:
             self.current_behavior = "aggressive"
             return self.current_behavior
 
-            if self.is_aggressive_enough():
-                self.current_behavior = "aggressive"
-                return self.current_behavior
-
-        # proactive aggression for non-Atimarga factions
         if self.faction != "atimarga":
             if self.is_aggressive_enough():
                 self.current_behavior = "aggressive"
                 return self.current_behavior
 
-        # middle tension state
         if self.mind.fear >= 0.35 or self.mind.stress >= 0.35:
             self.current_behavior = "alert"
             return self.current_behavior
 
-        # calm fallback
         self.current_behavior = "idle"
         return self.current_behavior
 
     # ------------------------------------------------------------
-    # main internal update
+    # explanation:
+    # main npc internal update.
+    #
+    # what this block does:
+    # - handles lod update timing
+    # - cools down contagion and attack timers
+    # - expires aggro memory
+    # - ticks the Rust mind
+    # - applies faction bias
+    # - decides current behavior
+    # - prints bark / behavior log
+    # - may emit a contagion packet
+    #
+    # how it fits into the code:
+    # this is the local heartbeat for one npc.
+    # world.py collects the results and handles the space-level outcomes.
     # ------------------------------------------------------------
     def update(self, player_pos, dt):
         if self.is_dead:
