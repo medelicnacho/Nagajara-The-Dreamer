@@ -1,0 +1,16 @@
+{
+  "name": "Nirmanakaya",
+  "emotion_bias": {
+    "fear": -0.05,
+    "stress": -0.15,
+    "curiosity": -0.05,
+    "trust": 0.10
+  },
+  "barks": [
+    "Hold the dream together.",
+    "Stability is mercy.",
+    "Do not disturb what must remain sleeping.",
+    "Continuity is survival.",
+    "Guard the sacred stillness."
+  ]
+}

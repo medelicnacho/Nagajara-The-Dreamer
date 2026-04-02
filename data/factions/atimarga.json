@@ -1,0 +1,16 @@
+{
+  "name": "Atimarga",
+  "emotion_bias": {
+    "fear": 0.00,
+    "stress": 0.10,
+    "curiosity": 0.30,
+    "trust": 0.00
+  },
+  "barks": [
+    "The dream must ripen.",
+    "Awakening cannot be delayed forever.",
+    "What sleeps will rise.",
+    "The veil is thinning.",
+    "Do not cling to the fading world."
+  ]
+}

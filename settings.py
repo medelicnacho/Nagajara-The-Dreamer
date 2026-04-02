@@ -55,6 +55,18 @@ CONTAGION_STRESS_GAIN = 0.15  # default stress gain when stress packet is receiv
 CONTAGION_CURIOSITY_GAIN = 0.20  # default curiosity gain from interesting events
 CONTAGION_TRUST_GAIN = 0.10   # default trust gain from positive social influence
 
+# thresholds for deciding whether an npc is "emotionally loud"
+# enough to broadcast contagion to nearby minds
+CONTAGION_FEAR_THRESHOLD = 0.60
+CONTAGION_STRESS_THRESHOLD = 0.70
+CONTAGION_CURIOSITY_THRESHOLD = 0.65
+CONTAGION_TRUST_THRESHOLD = 0.70
+
+# optional distance falloff control
+# if True, closer npcs receive stronger contagion
+# if False, everyone in radius receives the same flat intensity
+CONTAGION_USE_DISTANCE_FALLOFF = True
+
 
 # ============================================================
 # RUST BRAIN MEMORY SETTINGS
