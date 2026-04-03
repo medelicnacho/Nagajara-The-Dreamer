@@ -819,6 +819,10 @@ class World:
                 except Exception:
                     pass
 
+                # give them a specific target to chase
+                other.attack_target = killer
+                other.revenge_target = killer
+
     # ------------------------------------------------------------
     # explanation:
     # execute combat and movement from current behavior.
@@ -827,6 +831,7 @@ class World:
     # - fleeing units run or seek allied help
     # - aggressive Kalchakra use one shared target
     # - aggressive non-Kalchakra use nearest valid target
+    # - revenge targets ignore home distance limits
     # - attacks can trigger nearby ally aggro
     # - kills trigger stronger death-aggro
     #
@@ -892,7 +897,33 @@ class World:
 
                     continue
 
-                target, target_dist = self.find_nearest_enemy(npc)
+                # ------------------------------------------------
+                # explanation:
+                # non-Kalchakra aggressive behavior with revenge targeting.
+                #
+                # what this block does:
+                # - prefers revenge_target if one exists and is alive
+                # - remembers whether the chosen target is a revenge chase
+                # - skips the home distance cancel if this is revenge
+                #
+                # how it fits into the code:
+                # this is the rage contagion fix.
+                # death aggro should commit to the killer instead of
+                # getting canceled by normal tether rules.
+                # ------------------------------------------------
+                is_revenge_target = False
+
+                if hasattr(npc, "revenge_target") and npc.revenge_target is not None:
+                    if not npc.revenge_target.is_dead:
+                        target = npc.revenge_target
+                        target_dist = (target.get_pos() - npc.get_pos()).length()
+                        is_revenge_target = True
+                    else:
+                        npc.revenge_target = None
+                        target, target_dist = self.find_nearest_enemy(npc)
+                else:
+                    target, target_dist = self.find_nearest_enemy(npc)
+
                 npc.attack_target = target
 
                 if target is None:
@@ -906,10 +937,22 @@ class World:
 
                     continue
 
-                if self.is_target_too_far_from_home(npc, target):
-                    npc.attack_target = None
-                    self.update_idle_wander(npc, dt)
-                    continue
+                # ------------------------------------------------
+                # explanation:
+                # normal home tether check.
+                #
+                # what this block does:
+                # - only cancels far-away targets if this is NOT revenge
+                #
+                # how it fits into the code:
+                # revenge chases are supposed to punch through the usual
+                # territorial leash so the killer gets hunted properly.
+                # ------------------------------------------------
+                if not is_revenge_target:
+                    if self.is_target_too_far_from_home(npc, target):
+                        npc.attack_target = None
+                        self.update_idle_wander(npc, dt)
+                        continue
 
                 self.move_toward_target(npc, target, dt)
 
@@ -918,6 +961,11 @@ class World:
 
                     if target.is_dead:
                         self.alert_allies_on_death(target, npc)
+
+                        # clear revenge target if the revenge chase succeeded
+                        if is_revenge_target and hasattr(npc, "revenge_target"):
+                            if npc.revenge_target is target:
+                                npc.revenge_target = None
 
                     npc.attack_cooldown = NPC_ATTACK_COOLDOWN
 
